@@ -41,14 +41,28 @@ void wxApplication::OnDeviceDisconnected(std::string device) const
 
 void wxApplication::OnWindowCloseEvent(wxCloseEvent &evt)
 {
-    wxMessageDialog *box = new wxMessageDialog(main_frame, "This will disconnect all connected devices. Proceed?", "Confirm", wxYES_NO | wxICON_INFORMATION);
-
-    int res = box->ShowModal();
-
-    if(res == wxID_YES)
+    // During system shutdown/logoff CanVeto() is false — skip the dialog
+    // and clean up immediately so we don't block the OS from shutting down
+    if (!evt.CanVeto())
     {
         server->Close();
         Logger::monitor->Destroy();
         main_frame->Destroy();
+        return;
+    }
+
+    wxMessageDialog *box = new wxMessageDialog(main_frame, "This will disconnect all connected devices. Proceed?", "Confirm", wxYES_NO | wxICON_INFORMATION);
+
+    int res = box->ShowModal();
+
+    if (res == wxID_YES)
+    {
+        server->Close();
+        Logger::monitor->Destroy();
+        main_frame->Destroy();
+    }
+    else
+    {
+        evt.Veto();
     }
 }

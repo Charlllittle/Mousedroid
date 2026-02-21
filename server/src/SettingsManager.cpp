@@ -137,17 +137,16 @@ void SettingsManager::ADBOn()
 
 void SettingsManager::ADBOff()
 {
-    if(bAdbStarted)
-    {
-        #ifdef _WIN32
-            //int a = system("adb reverse --remove-all");
-            adb::kill(6969);
-        #else
-            int a = system("./adb reverse --remove-all");
-            LOG("ADB Server [PORT 6969] STOPPED");
-        #endif
-        bAdbStarted = false;
-    }
+    // Always kill the adb daemon — it is started as a side effect of
+    // 'adb reverse' even when no device is connected, so bAdbStarted
+    // alone is not a reliable indicator of whether it is running.
+    #ifdef _WIN32
+        adb::kill(6969);
+    #else
+        int a = system("./adb reverse --remove-all");
+        LOG("ADB Server [PORT 6969] STOPPED");
+    #endif
+    bAdbStarted = false;
 }
 
 bool SettingsManager::ADBState()

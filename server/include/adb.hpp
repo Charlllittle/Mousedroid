@@ -22,53 +22,81 @@ namespace adb
 		return path.substr(0, path.find_last_of("\\/"));
 	}
 
-	
+	/*
+	* Run adb.exe with the given arguments.
+	* Uses CreateProcess so it works correctly in a GUI (windowless) app.
+	* Waits up to timeoutMs for the process to finish.
+	* Returns the process exit code, or -1 on launch failure.
+	*/
+	int run(const std::string& args, DWORD timeoutMs = INFINITE)
+	{
+		std::string exe = dir() + "\\adb.exe";
+		std::string cmdline = "\"" + exe + "\" " + args;
+
+		STARTUPINFOA si = {};
+		si.cb = sizeof(si);
+		si.dwFlags = STARTF_USESHOWWINDOW;
+		si.wShowWindow = SW_HIDE;
+
+		PROCESS_INFORMATION pi = {};
+
+		if (!CreateProcessA(
+			exe.c_str(),
+			const_cast<char*>(cmdline.c_str()),
+			nullptr, nullptr, FALSE,
+			CREATE_NO_WINDOW,
+			nullptr, nullptr,
+			&si, &pi))
+		{
+			return -1;
+		}
+
+		WaitForSingleObject(pi.hProcess, timeoutMs);
+
+		DWORD exitCode = 1;
+		GetExitCodeProcess(pi.hProcess, &exitCode);
+
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+
+		return (int)exitCode;
+	}
+
 	/*
 	* Reverse the given tcp port.
 	* adb reverse tcp:<port> tcp:<port>
 	*/
 	bool start(int port)
 	{
-		std::string path = dir();
-		std::string command = path + "\\adb.exe " + "reverse tcp:" + std::to_string(port) + " tcp:" + std::to_string(port);
+		// Kill any stale adb server left over from a previous session
+		run("kill-server");
 
-		if (system(command.c_str()) == 0)
+		std::string args = "reverse tcp:" + std::to_string(port) + " tcp:" + std::to_string(port);
+
+		if (run(args) == 0)
 		{
 			LOG("[ADB:", port, "] Started");
 			return true;
 		}
-		else
-		{
-			LOG("[ADB:", port, "] Failed to start");
-			return false;
-		}
+
+		LOG("[ADB:", port, "] Failed to start");
+		return false;
 	}
 
 	/*
-	* Removes the reversed given tcp port.
-	* adb reverse --remove tcp:<port>
+	* Shuts down the adb server, which removes all reverse tunnels.
+	* Times out after 3 seconds so the app doesn't hang on close.
 	*/
 	bool kill(int port)
 	{
-		std::string path = dir();
-
-		// Sometimes without kill-server adb port remains used and the app
-		// won't start next time
-		// Sometimes with kill-server it takes too long for the app to stop
-		// becoming not responding
-		// std::string command = path + "\\adb\\adb.exe " + "reverse --remove tcp:" + std::to_string(port);
-		std::string command = path + "\\adb.exe " + "reverse --remove tcp:" + std::to_string(port) + " & " + path + "\\adb\\adb.exe kill-server";
-
-		if (system(command.c_str()) == 0)
+		if (run("kill-server", 3000) == 0)
 		{
 			LOG("[ADB:", port, "] Stopped");
 			return true;
 		}
-		else
-		{
-			LOG("[ADB:", port, "] Failed to stop");
-			return false;
-		}
+
+		LOG("[ADB:", port, "] Failed to stop");
+		return false;
 	}
 }
 

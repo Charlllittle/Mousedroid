@@ -41,13 +41,20 @@ void wxApplication::OnDeviceDisconnected(std::string device) const
 
 void wxApplication::OnWindowCloseEvent(wxCloseEvent &evt)
 {
-    // During system shutdown/logoff CanVeto() is false — skip the dialog
-    // and clean up immediately so we don't block the OS from shutting down
+    // System shutdown/logoff or forced quit (e.g. from tray menu) — clean up immediately
     if (!evt.CanVeto())
     {
         server->Close();
         Logger::monitor->Destroy();
         main_frame->Destroy();
+        return;
+    }
+
+    // Minimize to taskbar is on — hide the window instead of closing
+    // The app keeps running; use the tray icon to restore or quit
+    if (settings.GetMinToTaskbar())
+    {
+        main_frame->Hide();
         return;
     }
 
